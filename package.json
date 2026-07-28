@@ -1,0 +1,12 @@
+{
+  "name": "openh-site-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Synthetic uptime + shopping-flow monitor for openh.co.il",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}
