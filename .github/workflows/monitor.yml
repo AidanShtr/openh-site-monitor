@@ -2,10 +2,17 @@ name: Site monitor (openh.co.il)
 
 on:
   schedule:
-    # Every 30 minutes. GitHub's cron scheduler is best-effort and can slip a few
-    # minutes under load -- fine for this use case.
-    - cron: '*/30 * * * *'
-  workflow_dispatch: {} # lets you trigger a run manually from the Actions tab
+    # Every 30 minutes, offset to :07/:37. GitHub explicitly documents that jobs
+    # scheduled for the top of the hour (:00/:30) get delayed or dropped under load,
+    # since that's when demand across all of Actions spikes -- an off-beat minute
+    # avoids that queue and actually runs close to on-time.
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+    inputs:
+      simulate_failure:
+        description: 'Force a failure, just to test the email alert end-to-end'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -33,6 +40,10 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      - name: Simulate failure (manual test of the email alert only)
+        if: ${{ inputs.simulate_failure }}
+        run: 'echo "Forcing a failure to test the email alert -- not a real site issue" && exit 1'
+
       - name: Run monitoring suite
         run: npx playwright test
         env:
@@ -54,6 +65,26 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: playwright-report/
+
+      # One-time setup required: add repo secrets MAIL_USERNAME (a Gmail address) and
+      # MAIL_PASSWORD (a Gmail "App Password" for that address, not the normal login
+      # password) via Settings -> Secrets and variables -> Actions.
+      - name: Email alert on failure
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: '⚠️ openh.co.il site monitor failed'
+          to: openh2021@gmail.com
+          from: openh.co.il Site Monitor
+          body: |
+            The synthetic monitor detected a failure on openh.co.il.
+
+            Full report: https://aidanshtr.github.io/openh-site-monitor/
+            This run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
   publish-dashboard:
     needs: test
