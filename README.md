@@ -6,20 +6,38 @@ usable end-to-end, not just "responding to a ping."
 **Cost: $0.** No Claude/OpenAI API calls, no paid service. It's a headless-browser test suite
 (Playwright) run on a schedule by GitHub Actions' free tier.
 
-## What it checks, every 30 minutes
+## What it checks, every scheduled run
 
-1. **`cold-incognito.spec.js`** — simulates a brand-new customer: fresh browser context (no
-   cookies/history) + cache-busting headers/query params on every request, so it hits the real
-   origin the way a first-time visitor would. Walks: homepage → category page → product page →
-   add to cart → cart → checkout.
-2. **`warm-cached.spec.js`** — simulates a returning visitor with normal caching allowed (no
-   cache-busting). Loads the homepage twice and checks the repeat load is fast / reports a cache
-   HIT when the host sends a cache-status header, then runs the same shopping flow.
-3. **`mobile-layout.spec.js`** — checks the mobile viewport: header doesn't balloon to full-page
-   height, floating cart button is reachable, category grid doesn't overflow horizontally.
+**The shopping flow** (`cold-incognito.spec.js` + `warm-cached.spec.js`), on three browser
+profiles — desktop Chrome, Android Chrome (Pixel 7), and **real iPhone Safari (WebKit engine)**:
 
-Every run also fails on any JS console error encountered along the way (e.g. a broken image, a
-failed script). Each spec runs against both desktop and mobile emulated Chromium.
+homepage → category page → product **search** → product page (price, photo loads,
+add-to-cart button) → add to cart (badge increments) → cart (item + ₪ total + checkout link) →
+checkout (billing form + **at least one payment method offered**).
+
+The cold variant uses a fresh browser context with cache-busting (a true first-time visitor,
+no CDN/browser cache); the warm variant allows normal caching and also verifies the repeat
+homepage load is actually fast/served from cache.
+
+**Infrastructure** (`critical-infrastructure.spec.js`, once per run):
+- SSL certificate valid, with more than 14 days before expiry
+- `http://` correctly redirects to `https://`
+- Homepage loads in under 15s and is **indexable** (no accidental `noindex` — the classic
+  "site quietly vanishes from Google" disaster)
+- Sitemap reachable; robots.txt doesn't block the whole site
+
+**Site health** (`site-health.spec.js`, once per run):
+- Every header/nav menu link (all ~40, including submenus) returns a working page
+- No mixed content (insecure `http://` resources on the page)
+- Images on the homepage and a category page actually render (fails if more than a quarter
+  are broken)
+
+**Mobile layout** (`mobile-layout.spec.js`): header stays compact, floating cart button
+reachable, no horizontal overflow — on both mobile profiles and desktop.
+
+Pass/fail reflects "can customers actually buy": console errors that don't block checkout
+(e.g. a stray 404'd background image) are logged in the report as annotations but don't turn
+the dashboard red.
 
 ## One-time setup
 
