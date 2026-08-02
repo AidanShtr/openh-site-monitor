@@ -1,12 +1,10 @@
 name: Site monitor (openh.co.il)
 
 on:
-  schedule:
-    # Every 30 minutes, offset to :07/:37. GitHub explicitly documents that jobs
-    # scheduled for the top of the hour (:00/:30) get delayed or dropped under load,
-    # since that's when demand across all of Actions spikes -- an off-beat minute
-    # avoids that queue and actually runs close to on-time.
-    - cron: '7,37 * * * *'
+  # Manual-only by owner's choice: no cron. Trigger from the Actions tab ("Run
+  # workflow") or `gh workflow run monitor.yml`. To restore automatic checks, add a
+  # schedule: block back here (note GitHub delays/drops :00/:30 crons under load;
+  # use an off-beat minute like 7,37 * * * *).
   workflow_dispatch:
     inputs:
       simulate_failure:
