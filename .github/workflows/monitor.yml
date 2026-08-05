@@ -1,10 +1,14 @@
 name: Site monitor (openh.co.il)
 
 on:
-  # Manual-only by owner's choice: no cron. Trigger from the Actions tab ("Run
-  # workflow") or `gh workflow run monitor.yml`. To restore automatic checks, add a
-  # schedule: block back here (note GitHub delays/drops :00/:30 crons under load;
-  # use an off-beat minute like 7,37 * * * *).
+  schedule:
+    # Daily ~8:30 AM Israel time. GitHub Actions cron is UTC-only and deprioritizes jobs
+    # landing exactly on :00/:30 under load (confirmed earlier -- caused hours-long
+    # delays), hence :33 instead of :30. 05:33 UTC = 08:33 Israel Daylight Time (IDT,
+    # UTC+3, in effect roughly Mar-Oct). When Israel switches to Standard Time (IST,
+    # UTC+2) in late October, this will drift to 07:33 local -- bump to '33 6 * * *' then
+    # if you want it to stay pinned to 8:30 AM year-round.
+    - cron: '33 5 * * *'
   workflow_dispatch:
     inputs:
       simulate_failure:

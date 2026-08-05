@@ -28,14 +28,14 @@ module.exports = defineConfig({
     {
       name: 'mobile-chromium',
       use: { ...devices['Pixel 7'] },
-      testIgnore: ['**/critical-infrastructure.spec.js', '**/site-health.spec.js'],
+      testIgnore: ['**/critical-infrastructure.spec.js', '**/site-health.spec.js', '**/order-submission.spec.js'],
     },
     // Real Safari engine (WebKit), not Chrome pretending to be a phone -- iPhone users
     // are a large share of shoppers and Safari has its own cookie/cache/render behavior.
     {
       name: 'iphone-safari',
       use: { ...devices['iPhone 14'] },
-      testIgnore: ['**/critical-infrastructure.spec.js', '**/site-health.spec.js'],
+      testIgnore: ['**/critical-infrastructure.spec.js', '**/site-health.spec.js', '**/order-submission.spec.js'],
     },
   ],
 });

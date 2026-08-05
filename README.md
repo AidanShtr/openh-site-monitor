@@ -33,7 +33,18 @@ homepage load is actually fast/served from cache.
   are broken)
 
 **Mobile layout** (`mobile-layout.spec.js`): header stays compact, floating cart button
-reachable, no horizontal overflow — on both mobile profiles and desktop.
+reachable, no horizontal overflow, and the checkout form isn't covered by a floating
+widget/popup — on both mobile profiles and desktop.
+
+**Real order submission** (`order-submission.spec.js`, once per run, desktop only): places
+one actual test order (fixed identity: עידן בדיקה / ashtrozer@gmail.com — instantly
+recognizable in WooCommerce → Orders) and confirms the submission itself succeeds — either
+redirecting to the real payment gateway or getting a legitimate validation rejection. **Never
+enters card details or completes a payment.** This exists because every other test
+deliberately stops one step short of the real submit button (to avoid spamming the store),
+which is exactly the gap that let a real checkout outage (Aug 2026, see below) go undetected
+by the rest of the suite. Clear out the resulting test orders periodically — search "בדיקה"
+in WooCommerce → Orders and bulk-trash them.
 
 Pass/fail reflects "can customers actually buy": console errors that don't block checkout
 (e.g. a stray 404'd background image) are logged in the report as annotations but don't turn
@@ -61,18 +72,34 @@ Open `playwright-report/index.html` afterwards for the same HTML report CI produ
 
 ## Tuning
 
-- **Frequency**: edit the cron in `.github/workflows/monitor.yml` (`*/30 * * * *`). Don't go much
-  tighter than every 15 min without checking your Actions minutes budget.
+- **Frequency**: runs daily at ~8:30 AM Israel time (`.github/workflows/monitor.yml`), plus
+  on-demand via the Actions tab ("Run workflow") or `gh workflow run monitor.yml`. GitHub's
+  scheduler deprioritizes crons landing exactly on `:00`/`:30` under load, hence `:33` instead
+  of `:30` — confirmed directly (a `*/30` schedule was observed firing as rarely as once every
+  ~6-11 hours before this fix). Note the cron is UTC-fixed, so it'll drift an hour relative to
+  Israel local time across the DST switch each spring/fall — see the comment in the workflow.
 - **Canary product**: `tests/shared-flow.js` hardcodes one simple, in-stock product to run the
   add-to-cart/checkout flow against. If that product is ever removed or discontinued, swap in
   another one's URL.
-- **Alerting**: currently log/dashboard only (per your preference) — no email/Slack push. If you
-  want alerts later, the cheapest add is a step in the workflow that pings a Slack/Discord webhook
-  or sends an email only `if: failure()`.
+- **Alerting**: emails `openh2021@gmail.com` on any failure, via a Gmail App Password stored as
+  the `MAIL_USERNAME`/`MAIL_PASSWORD` repo secrets. Requires those secrets to be set for the
+  email step to actually fire.
 
-## Known finding from initial verification
+## Known findings from building/using this
 
-While building this, the cold-visitor flow caught a real 404 on the homepage:
-`https://openh.co.il/wp-content/uploads/2026/05/ChatGPT-Image-May-27-2026-10_16_11-PM.png` — a
-missing image, likely from an Elementor section. Worth fixing; until then this test will
-legitimately fail on every run (that's the monitor doing its job, not a bug in the suite).
+- **Aug 2026, real checkout outage**: WooCommerce auto-updated to v11, and the installed
+  payment gateway plugin (Yaad Sarig / YaadPay) only ships compatibility classes through v10 —
+  its `tb_wc_object::factory()` returns `null` for anything checkout-related on v11, causing a
+  hard PHP fatal (`Call to a member function get_total() on null`) on every single order
+  attempt. 100% of orders failed until this was resolved. This is a plugin-side bug affecting
+  every site running that plugin on WooCommerce 11+ (2,000+ active installs), not something
+  specific to this store. This is exactly why `order-submission.spec.js` exists — nothing else
+  in the suite submitted a real order, so this outage went undetected by automation the whole
+  time it was live.
+- Two separate popup/overlay incidents (also Aug 2026, see `mobile-layout.spec.js` and
+  `shared-flow.js` comments): the Joinchat WhatsApp widget auto-opening over the mobile
+  checkout form, and a separate Elementor promo popup covering the product page's add-to-cart
+  button at an unpredictable delay. Both are now guarded against (`clickThroughPopups`).
+- A 404'd homepage background image
+  (`wp-content/uploads/2026/05/ChatGPT-Image-May-27-2026-10_16_11-PM.png`) is a known, low
+  -impact leftover — logged in the report as a non-blocking annotation, doesn't fail the suite.
