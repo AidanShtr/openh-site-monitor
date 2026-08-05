@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { PRODUCT_PATH } = require('./shared-flow');
+const { PRODUCT_PATH, clickThroughPopups } = require('./shared-flow');
 
 // Sanity checks for the mobile revamp (compact single-row header, floating quick-add
 // cart button, no horizontal overflow on product listings). Kept loose/structural on
@@ -45,13 +45,10 @@ test.describe('mobile layout', () => {
 
     await page.goto(PRODUCT_PATH, { waitUntil: 'domcontentloaded' });
     // A separate Elementor promo popup can cover the product page itself and block this
-    // click (real incident, Aug 2026) -- close it if present rather than hanging on a
-    // bounded-timeout click that never lands.
-    const productPopup = page.locator('.elementor-popup-modal:visible').first();
-    if (await productPopup.count()) {
-      await productPopup.locator('.dialog-close-button, [aria-label="Close"]').first().click({ timeout: 3_000 }).catch(() => {});
-    }
-    await page.locator('button.single_add_to_cart_button').first().click({ timeout: 15_000 });
+    // click, appearing at an unpredictable moment mid-click (real incident, Aug 2026) --
+    // clickThroughPopups reacts to the actual interception and retries rather than hoping
+    // a one-time check catches it before it appears.
+    await clickThroughPopups(page.locator('button.single_add_to_cart_button').first(), page);
     await expect
       .poll(async () => page.locator('.moderncart-floating-cart-count span').innerText().catch(() => '0'))
       .not.toBe('0');

@@ -18,6 +18,42 @@ function bust(path, cacheBust) {
 }
 
 /**
+ * Clicks `locator`, and if an Elementor popup ad appears mid-click and blocks it (real
+ * incident, Aug 2026: a WhatsApp/phone customer-service promo popup covered the product
+ * page and silently ate every retry until the test timed out), detects and closes the
+ * popup and retries the click. The popup's trigger is delayed/unpredictable -- it can
+ * appear *during* the click attempt, not just before it -- so this reacts to the actual
+ * failure instead of checking once up front. Fails fast with the popup's text if it can't
+ * be dismissed, instead of a generic timeout.
+ */
+async function clickThroughPopups(locator, page, { attempts = 4, clickTimeout = 5_000 } = {}) {
+  let lastError;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      await locator.click({ timeout: clickTimeout });
+      return;
+    } catch (err) {
+      lastError = err;
+      const popup = page.locator('.elementor-popup-modal:visible').first();
+      if (!(await popup.count())) throw err; // not a popup issue -- a real failure
+      const popupText = await popup.innerText().catch(() => '(unknown content)');
+      const closeBtn = popup.locator('.dialog-close-button, [aria-label="Close"]').first();
+      await closeBtn.click({ timeout: 3_000 }).catch(() => {});
+      const stillOpen = await popup
+        .waitFor({ state: 'hidden', timeout: 5_000 })
+        .then(() => false)
+        .catch(() => true);
+      if (stillOpen && i === attempts - 1) {
+        throw new Error(
+          `a popup keeps covering the page and blocking the click, and won't close: "${popupText.slice(0, 150)}"`
+        );
+      }
+    }
+  }
+  throw lastError;
+}
+
+/**
  * Runs the full "new customer buys a product" journey and returns timing + assertions
  * for each step. `cacheBust` appends a fresh query string + no-cache headers to every
  * navigation so CDN/browser caches are bypassed (simulates a true first-time visitor).
@@ -84,24 +120,8 @@ async function runShoppingFlow(page, { expect, cacheBust }) {
 
   // 5. Add to cart (AJAX) and confirm the floating cart badge increments
   await t('add_to_cart', async () => {
-    // Real incident (Aug 2026): an Elementor popup ad (WhatsApp/phone customer service
-    // promo) can cover the product page and intercept the add-to-cart click entirely --
-    // Playwright then retries the click silently for up to the test timeout, surfacing as
-    // an opaque 90s hang instead of a clear failure. Detect and close it first; if it can't
-    // be closed, fail immediately with a message that says exactly what's blocking the button.
-    const blockingPopup = page.locator('.elementor-popup-modal:visible').first();
-    if (await blockingPopup.count()) {
-      const popupText = await blockingPopup.innerText().catch(() => '(unknown content)');
-      const closeBtn = blockingPopup.locator('.dialog-close-button, [aria-label="Close"]').first();
-      await closeBtn.click({ timeout: 3_000 }).catch(() => {});
-      await expect(
-        blockingPopup,
-        `a popup is covering the product page and blocking the add-to-cart button: "${popupText.slice(0, 150)}"`
-      ).toBeHidden({ timeout: 5_000 });
-    }
-
     const countBefore = await page.locator('.moderncart-floating-cart-count span').innerText().catch(() => '0');
-    await addToCartBtn.click({ timeout: 15_000 });
+    await clickThroughPopups(addToCartBtn, page);
     await expect
       .poll(async () => page.locator('.moderncart-floating-cart-count span').innerText().catch(() => countBefore))
       .not.toBe(countBefore);
@@ -135,4 +155,4 @@ async function runShoppingFlow(page, { expect, cacheBust }) {
   return { timings, consoleErrors };
 }
 
-module.exports = { runShoppingFlow, CATEGORY_PATH, PRODUCT_PATH, SEARCH_TERM };
+module.exports = { runShoppingFlow, CATEGORY_PATH, PRODUCT_PATH, SEARCH_TERM, clickThroughPopups };
