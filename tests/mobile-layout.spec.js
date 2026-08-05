@@ -44,7 +44,14 @@ test.describe('mobile layout', () => {
     test.setTimeout(90_000);
 
     await page.goto(PRODUCT_PATH, { waitUntil: 'domcontentloaded' });
-    await page.locator('button.single_add_to_cart_button').first().click();
+    // A separate Elementor promo popup can cover the product page itself and block this
+    // click (real incident, Aug 2026) -- close it if present rather than hanging on a
+    // bounded-timeout click that never lands.
+    const productPopup = page.locator('.elementor-popup-modal:visible').first();
+    if (await productPopup.count()) {
+      await productPopup.locator('.dialog-close-button, [aria-label="Close"]').first().click({ timeout: 3_000 }).catch(() => {});
+    }
+    await page.locator('button.single_add_to_cart_button').first().click({ timeout: 15_000 });
     await expect
       .poll(async () => page.locator('.moderncart-floating-cart-count span').innerText().catch(() => '0'))
       .not.toBe('0');

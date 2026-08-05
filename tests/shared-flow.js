@@ -84,8 +84,24 @@ async function runShoppingFlow(page, { expect, cacheBust }) {
 
   // 5. Add to cart (AJAX) and confirm the floating cart badge increments
   await t('add_to_cart', async () => {
+    // Real incident (Aug 2026): an Elementor popup ad (WhatsApp/phone customer service
+    // promo) can cover the product page and intercept the add-to-cart click entirely --
+    // Playwright then retries the click silently for up to the test timeout, surfacing as
+    // an opaque 90s hang instead of a clear failure. Detect and close it first; if it can't
+    // be closed, fail immediately with a message that says exactly what's blocking the button.
+    const blockingPopup = page.locator('.elementor-popup-modal:visible').first();
+    if (await blockingPopup.count()) {
+      const popupText = await blockingPopup.innerText().catch(() => '(unknown content)');
+      const closeBtn = blockingPopup.locator('.dialog-close-button, [aria-label="Close"]').first();
+      await closeBtn.click({ timeout: 3_000 }).catch(() => {});
+      await expect(
+        blockingPopup,
+        `a popup is covering the product page and blocking the add-to-cart button: "${popupText.slice(0, 150)}"`
+      ).toBeHidden({ timeout: 5_000 });
+    }
+
     const countBefore = await page.locator('.moderncart-floating-cart-count span').innerText().catch(() => '0');
-    await addToCartBtn.click();
+    await addToCartBtn.click({ timeout: 15_000 });
     await expect
       .poll(async () => page.locator('.moderncart-floating-cart-count span').innerText().catch(() => countBefore))
       .not.toBe(countBefore);
