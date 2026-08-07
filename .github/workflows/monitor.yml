@@ -1,14 +1,13 @@
 name: Site monitor (openh.co.il)
 
 on:
-  schedule:
-    # Daily ~8:30 AM Israel time. GitHub Actions cron is UTC-only and deprioritizes jobs
-    # landing exactly on :00/:30 under load (confirmed earlier -- caused hours-long
-    # delays), hence :33 instead of :30. 05:33 UTC = 08:33 Israel Daylight Time (IDT,
-    # UTC+3, in effect roughly Mar-Oct). When Israel switches to Standard Time (IST,
-    # UTC+2) in late October, this will drift to 07:33 local -- bump to '33 6 * * *' then
-    # if you want it to stay pinned to 8:30 AM year-round.
-    - cron: '33 5 * * *'
+  # No native GitHub `schedule:` trigger -- confirmed twice that GitHub's own cron
+  # scheduler is unreliable for this repo (once missed almost entirely at a 30-min
+  # interval, then ran ~7 hours late on a daily interval even off the :00/:30 minute
+  # mark). Daily triggering is instead handled externally by a free cron-job.org job
+  # that calls this workflow's `workflow_dispatch` API endpoint on a real timer -- see
+  # README for setup. This trigger just needs to stay available for that call (and for
+  # manual runs from the Actions tab / `gh workflow run`).
   workflow_dispatch:
     inputs:
       simulate_failure:
