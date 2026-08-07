@@ -53,12 +53,27 @@ the dashboard red.
 ## One-time setup
 
 1. Create a GitHub repo (public repos get unlimited free Actions minutes; private repos get
-   2,000 free minutes/month, plenty for a 30-min-interval job).
+   2,000 free minutes/month, plenty for a daily job).
 2. Push this folder to it.
 3. In the repo: **Settings → Pages → Source → "GitHub Actions"**. This gives you a persistent
    dashboard URL showing the latest pass/fail report (screenshots + traces on failure), instead of
    digging through the Actions tab.
-4. That's it — the workflow in `.github/workflows/monitor.yml` runs on its own from then on.
+4. **Daily trigger (external, since GitHub's own `schedule:` proved unreliable — see below):**
+   free [cron-job.org](https://cron-job.org) account that calls this workflow's
+   `workflow_dispatch` API endpoint on a real timer.
+   - GitHub → Settings → Developer settings → **Fine-grained personal access tokens** → generate
+     one scoped to **only this repository**, with **Actions: Read and write** permission (nothing
+     else). Copy the token.
+   - cron-job.org → Create cronjob:
+     - URL: `https://api.github.com/repos/<owner>/<repo>/actions/workflows/monitor.yml/dispatches`
+     - Method: `POST`
+     - Headers: `Authorization: Bearer <your token>`, `Accept: application/vnd.github+json`,
+       `Content-Type: application/json`
+     - Body: `{"ref":"main"}`
+     - Schedule: whatever time you want, in your own timezone (cron-job.org handles DST for you,
+       unlike GitHub's UTC-only cron).
+5. That's it — manual runs still work from the Actions tab / `gh workflow run monitor.yml`
+   regardless of the external scheduler.
 
 ## Running it locally
 
